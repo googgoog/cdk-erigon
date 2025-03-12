@@ -106,6 +106,9 @@ func (m *EriDb) CommitBatch() error {
 }
 
 func (m *EriDb) RollbackBatch() {
+	if m.tx == nil {
+		return
+	}
 	if _, ok := m.tx.(kv.PendingMutations); !ok {
 		return // don't roll back a kvRw tx
 	}

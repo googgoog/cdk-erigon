@@ -137,8 +137,7 @@ func sequencingBatchStep(
 	if err != nil {
 		return err
 	}
-	defer sdb.tx.Rollback()
-	defer sdb.txsmt.Rollback()
+	defer sdb.Rollback()
 
 	if sdb.supportAC {
 		sdb.eridb.SetCache(s.GetSmtCache())
@@ -805,8 +804,7 @@ func sequencingBatchStep(
 			if errCommitAndStart := sdb.CommitAndStart(); errCommitAndStart != nil {
 				return errCommitAndStart
 			}
-			defer sdb.tx.Rollback()
-			defer sdb.txsmt.Rollback()
+			defer sdb.Rollback()
 			metrics.GetLogStatistics().CumulativeTiming(metrics.BatchCommitDBTiming, time.Since(commitTime))
 		}
 
@@ -869,8 +867,7 @@ func sequencingBatchStep(
 			if errCommitAndStart := sdb.CommitAndStart(); errCommitAndStart != nil {
 				return errCommitAndStart
 			}
-			defer sdb.tx.Rollback()
-			defer sdb.txsmt.Rollback()
+			defer sdb.Rollback()
 			metrics.GetLogStatistics().CumulativeTiming(metrics.BatchCommitDBTiming, time.Since(commitTime))
 		}
 
