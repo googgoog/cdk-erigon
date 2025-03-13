@@ -812,7 +812,6 @@ var ReconTables = []string{
 	PlainContractD,
 }
 
-// ChaindataDeprecatedTables - list of buckets which can be programmatically deleted - for example after migration
 const tableSmt = "HermezSmt"
 const tableStats = "HermezSmtStats"
 const tableAccountValues = "HermezSmtAccountValues"
@@ -825,6 +824,12 @@ var TablesSmt = []string{
 	tableAccountValues,
 	tableMetadata,
 	tableHashKey,
+}
+
+// ChaindataDeprecatedTables - list of buckets which can be programmatically deleted - for example after migration
+var ChaindataDeprecatedTables = []string{
+	Clique,
+	TransitionBlockKey,
 }
 
 var DiagnosticsTables = []string{
@@ -958,10 +963,13 @@ func sortBuckets() {
 	})
 }
 
+/*
+// we now call reinit() in backend.New()
 func init() {
 	fmt.Println("[cdk-erigon-lib] init() in erigon-lib/kv/tables.go")
 	reinit()
 }
+*/
 
 func reinit() {
 	sortBuckets()
