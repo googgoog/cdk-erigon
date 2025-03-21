@@ -819,9 +819,7 @@ const tableAccountValues = "HermezSmtAccountValues"
 const tableMetadata = "HermezSmtMetadata"
 const tableHashKey = "HermezSmtHashKey"
 
-var ChaindataDeprecatedTables = []string{
-	Clique,
-	TransitionBlockKey,
+var TablesSmt = []string{
 	tableSmt,
 	tableStats,
 	tableAccountValues,
@@ -1019,6 +1017,15 @@ func reinit() {
 			DiagnosticsTablesCfg[name] = TableCfgItem{}
 		}
 	}
+}
+
+func InitStandaloneSMT(standalone bool) {
+	if standalone {
+		ChaindataTables = append(ChaindataTables, TablesSmt...)
+	} else {
+		ChaindataDeprecatedTables = append(ChaindataDeprecatedTables, TablesSmt...)
+	}
+	reinit()
 }
 
 // Temporal
