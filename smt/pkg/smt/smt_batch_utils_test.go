@@ -29,7 +29,7 @@ func initDb(t *testing.T, dbPath string) (kv.RwDB, kv.RwTx, *db.EriDb) {
 		t.Fatalf("Cannot create db %e", err)
 	}
 
-	migrator := migrations.NewMigrator(kv.ChainDB)
+	migrator := migrations.NewMigrator(kv.ChainDB, false)
 	if err := migrator.VerifyVersion(database); err != nil {
 		t.Fatalf("Cannot verify db version %e", err)
 	}
@@ -49,7 +49,7 @@ func initDb(t *testing.T, dbPath string) (kv.RwDB, kv.RwTx, *db.EriDb) {
 	}
 
 	db.CreateEriDbBuckets(dbTransaction)
-	return database, dbTransaction, db.NewEriDb(dbTransaction)
+	return database, dbTransaction, db.NewEriDb(dbTransaction, nil)
 }
 
 func prepareData() ([]*BatchInsertDataHolder, int) {

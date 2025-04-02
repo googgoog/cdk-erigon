@@ -97,7 +97,7 @@ services:
 
   xlayer-seq:
     container_name: xlayer-seq
-    image: cdk-erigon
+    image: cdk-erigon  # 确保此镜像已使用支持调试的Dockerfile构建
     environment:
       - CDK_ERIGON_SEQUENCER=1
       - WRITE_MAP=true

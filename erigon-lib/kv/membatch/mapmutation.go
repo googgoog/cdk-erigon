@@ -13,12 +13,13 @@ import (
 
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"github.com/ledgerwatch/erigon/zk/metrics"
 	"github.com/ledgerwatch/log/v3"
 )
 
 type Mapmutation struct {
-	puts   map[string]map[string][]byte // table -> key -> value ie. blocks -> hash -> blockBod
+	puts          map[string]map[string][]byte // table -> key -> value ie. blocks -> hash -> blockBod
+	modifiedCache map[string]map[string][]byte
+
 	db     kv.Tx
 	quit   <-chan struct{}
 	clean  func()
@@ -46,23 +47,42 @@ func NewHashBatch(tx kv.Tx, quit <-chan struct{}, tmpdir string, logger log.Logg
 	}
 
 	return &Mapmutation{
-		db:     tx,
-		puts:   make(map[string]map[string][]byte),
-		quit:   quit,
-		clean:  clean,
-		tmpdir: tmpdir,
-		logger: logger,
+		db:            tx,
+		puts:          make(map[string]map[string][]byte),
+		modifiedCache: make(map[string]map[string][]byte),
+		quit:          quit,
+		clean:         clean,
+		tmpdir:        tmpdir,
+		logger:        logger,
+	}
+}
+
+func NewHashBatchWithCache(tx kv.Tx, quit <-chan struct{}, tmpdir string, logger log.Logger, cache map[string]map[string][]byte) *Mapmutation {
+	clean := func() {}
+	if quit == nil {
+		ch := make(chan struct{})
+		clean = func() { close(ch) }
+		quit = ch
+	}
+
+	return &Mapmutation{
+		db:            tx,
+		puts:          cache,
+		modifiedCache: make(map[string]map[string][]byte),
+		quit:          quit,
+		clean:         clean,
+		tmpdir:        tmpdir,
+		logger:        logger,
 	}
 }
 
 func (m *Mapmutation) getMem(table string, key []byte) ([]byte, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, ok := m.puts[table]; !ok {
-		return nil, false
-	}
-	if value, ok := m.puts[table][*(*string)(unsafe.Pointer(&key))]; ok {
-		return value, ok
+	if ptm, ok := m.puts[table]; ok {
+		if value, ok := ptm[*(*string)(unsafe.Pointer(&key))]; ok {
+			return value, ok
+		}
 	}
 
 	return nil, false
@@ -145,19 +165,30 @@ func (m *Mapmutation) Has(table string, key []byte) (bool, error) {
 func (m *Mapmutation) Put(table string, k, v []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.puts[table]; !ok {
-		m.puts[table] = make(map[string][]byte)
+
+	var ok bool
+	var putsTable map[string][]byte
+	if putsTable, ok = m.puts[table]; !ok {
+		putsTable = make(map[string][]byte)
+		m.puts[table] = putsTable
+	}
+
+	var modifiedTableCache map[string][]byte
+	if modifiedTableCache, ok = m.modifiedCache[table]; !ok {
+		modifiedTableCache = make(map[string][]byte)
+		m.modifiedCache[table] = modifiedTableCache
 	}
 
 	stringKey := string(k)
 
-	var ok bool
-	if _, ok = m.puts[table][stringKey]; ok {
-		m.size += len(v) - len(m.puts[table][stringKey])
-		m.puts[table][stringKey] = v
+	modifiedTableCache[stringKey] = v
+
+	if preValue, ok := putsTable[stringKey]; ok {
+		m.size += len(v) - len(preValue)
+		putsTable[stringKey] = v
 		return nil
 	}
-	m.puts[table][stringKey] = v
+	putsTable[stringKey] = v
 	m.size += len(k) + len(v)
 	m.count++
 
@@ -258,8 +289,6 @@ func (m *Mapmutation) doCommit(tx kv.RwTx) error {
 	count := 0
 	total := float64(m.count)
 	for table, bucket := range m.puts {
-		startTime := time.Now()
-		metrics.GetLogStatistics().CumulativeValue(metrics.LogTag(table), int64(len(bucket)))
 		collector := etl.NewCollector("", m.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize/2), m.logger)
 		defer collector.Close()
 		collector.SortAndFlushInBackground(true)
@@ -280,11 +309,64 @@ func (m *Mapmutation) doCommit(tx kv.RwTx) error {
 			return err
 		}
 		collector.Close()
-		metrics.GetLogStatistics().CumulativeTiming(metrics.LogTag(table)+"Timing", time.Since(startTime))
 	}
 
 	tx.CollectMetrics()
 	return nil
+}
+
+func (m *Mapmutation) SetCache(cache map[string]map[string][]byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.puts = cache
+}
+
+func (m *Mapmutation) RetrieveAndCleanSmtCache(smtTables []string) (map[string]map[string][]byte, map[string]map[string][]byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	targetCachedTable := make(map[string]map[string][]byte, len(smtTables))
+	deltaTargetCached := make(map[string]map[string][]byte, len(smtTables))
+
+	for _, table := range smtTables {
+		if bucket, ok := m.puts[table]; ok {
+			targetCachedTable[table] = bucket
+			for k, v := range bucket {
+				if v == nil || len(v) == 0 {
+					delete(bucket, k)
+				}
+			}
+
+			delete(m.puts, table)
+		}
+
+		if bucket, ok := m.modifiedCache[table]; ok {
+			deltaTargetCached[table] = bucket
+
+			delete(m.modifiedCache, table)
+		}
+	}
+
+	return targetCachedTable, deltaTargetCached
+}
+
+func (m *Mapmutation) ResetCacheContent() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// 重置原始 map
+	m.puts = m.modifiedCache
+	m.modifiedCache = map[string]map[string][]byte{}
+	m.size = 0
+	m.count = 0
+
+	for _, bucket := range m.puts {
+		m.count += uint64(len(bucket))
+		for k, v := range bucket {
+			m.size += len(k) + len(v)
+		}
+	}
 }
 
 func (m *Mapmutation) Flush(ctx context.Context, tx kv.RwTx) error {
@@ -293,11 +375,15 @@ func (m *Mapmutation) Flush(ctx context.Context, tx kv.RwTx) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.puts) == 0 {
+		return nil
+	}
 	if err := m.doCommit(tx); err != nil {
 		return err
 	}
 
 	m.puts = map[string]map[string][]byte{}
+	m.modifiedCache = map[string]map[string][]byte{}
 	m.size = 0
 	m.count = 0
 	return nil
@@ -311,6 +397,7 @@ func (m *Mapmutation) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.puts = map[string]map[string][]byte{}
+	m.modifiedCache = map[string]map[string][]byte{}
 	m.size = 0
 	m.count = 0
 	m.size = 0

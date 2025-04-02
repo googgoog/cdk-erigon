@@ -65,6 +65,7 @@ type DoneHook interface {
 
 type SequenceBlockCfg struct {
 	db            kv.RwDB
+	dbsmt         kv.RwDB
 	batchSize     datasize.ByteSize
 	prune         prune.Mode
 	changeSetHook stagedsync.ChangeSetHook
@@ -99,6 +100,7 @@ type SequenceBlockCfg struct {
 
 func StageSequenceBlocksCfg(
 	db kv.RwDB,
+	dbsmt kv.RwDB,
 	pm prune.Mode,
 	batchSize datasize.ByteSize,
 	changeSetHook stagedsync.ChangeSetHook,
@@ -129,6 +131,7 @@ func StageSequenceBlocksCfg(
 
 	return SequenceBlockCfg{
 		db:               db,
+		dbsmt:            dbsmt,
 		prune:            pm,
 		batchSize:        batchSize,
 		changeSetHook:    changeSetHook,
