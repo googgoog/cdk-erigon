@@ -118,6 +118,8 @@ different_files=(
     "AccountHistory.txt"
 )
 
+# 111
+
 is_in_array() {
     local element="$1"
     for elem in "${different_files[@]}"; do
