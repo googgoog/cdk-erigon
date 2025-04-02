@@ -133,15 +133,15 @@ func sequencingBatchStep(
 		return err
 	}
 
-	sdb, err := newStageDb(ctx, cfg.db, cfg.dbsmt, supportAC)
+	sdb, err := newStageDb(ctx, cfg.db, cfg.dbsmt)
 	if err != nil {
 		return err
 	}
 	defer sdb.Rollback()
 
-	if sdb.supportAC {
-		sdb.eridb.SetCache(s.GetSmtCache())
-	}
+	// if sdb.supportAC {
+	// 	sdb.eridb.SetCache(s.GetSmtCache())
+	// }
 
 	if err = cfg.infoTreeUpdater.WarmUp(sdb.tx); err != nil {
 		return err
@@ -194,7 +194,7 @@ func sequencingBatchStep(
 			return err
 		}
 
-		return sdb.Commit(s, true)
+		return sdb.Commit()
 	}
 
 	if shouldCheckForExecutionAndDataStreamAlignment {
@@ -211,7 +211,7 @@ func sequencingBatchStep(
 				return err
 			}
 			if isUnwinding {
-				err := sdb.Commit(s, true)
+				err := sdb.Commit()
 				if err != nil {
 					// do not set shouldCheckForExecutionAndDataStreamAlighment=false because of the error
 					return err
@@ -230,7 +230,7 @@ func sequencingBatchStep(
 	if exitStage {
 		log.Info(fmt.Sprintf("[%s] Exiting stage during halted sequencer", logPrefix))
 		// commit the tx so any updates to the stream etc are persisted
-		return sdb.Commit(s, true)
+		return sdb.Commit()
 	}
 
 	if err := utils.UpdateZkEVMBlockCfg(cfg.chainConfig, sdb.hermezDb, logPrefix); err != nil {
@@ -754,30 +754,30 @@ func sequencingBatchStep(
 			break
 		}
 
-		if batchContext.sdb.supportAC {
-			quit := batchContext.ctx.Done()
-			batchContext.sdb.eridb.OpenBatch(quit) // do nothing...
-			batchContext.sdb.eridb.SetCache(s.GetSmtCache())
-			if block, err = doFinishBlockAndUpdateState(batchContext, ibs, header, parentBlock, batchState, ger, l1BlockHash, l1TreeUpdateIndex, infoTreeIndexProgress, batchCounters); err != nil {
-				batchContext.sdb.eridb.RollbackBatch()
-				return err
-			}
-			smtCache, deltaCache := batchContext.sdb.eridb.RetriveAndCleanCache()
-			if err := batchContext.sdb.eridb.CommitBatch(); err != nil {
-				return err
-			}
-			s.SetSmtCache(smtCache, deltaCache)
-		} else {
-			quit := batchContext.ctx.Done()
-			batchContext.sdb.eridb.OpenBatch(quit)
-			if block, err = doFinishBlockAndUpdateState(batchContext, ibs, header, parentBlock, batchState, ger, l1BlockHash, l1TreeUpdateIndex, infoTreeIndexProgress, batchCounters); err != nil {
-				batchContext.sdb.eridb.RollbackBatch()
-				return err
-			}
-			if err := batchContext.sdb.eridb.CommitBatch(); err != nil {
-				return err
-			}
+		// if batchContext.sdb.supportAC {
+		// 	quit := batchContext.ctx.Done()
+		// 	batchContext.sdb.eridb.OpenBatch(quit) // do nothing...
+		// 	batchContext.sdb.eridb.SetCache(s.GetSmtCache())
+		// 	if block, err = doFinishBlockAndUpdateState(batchContext, ibs, header, parentBlock, batchState, ger, l1BlockHash, l1TreeUpdateIndex, infoTreeIndexProgress, batchCounters); err != nil {
+		// 		batchContext.sdb.eridb.RollbackBatch()
+		// 		return err
+		// 	}
+		// 	smtCache, deltaCache := batchContext.sdb.eridb.RetriveAndCleanCache()
+		// 	if err := batchContext.sdb.eridb.CommitBatch(); err != nil {
+		// 		return err
+		// 	}
+		// 	s.SetSmtCache(smtCache, deltaCache)
+		// } else {
+		quit := batchContext.ctx.Done()
+		batchContext.sdb.eridb.OpenBatch(quit)
+		if block, err = doFinishBlockAndUpdateState(batchContext, ibs, header, parentBlock, batchState, ger, l1BlockHash, l1TreeUpdateIndex, infoTreeIndexProgress, batchCounters); err != nil {
+			batchContext.sdb.eridb.RollbackBatch()
+			return err
 		}
+		if err := batchContext.sdb.eridb.CommitBatch(); err != nil {
+			return err
+		}
+		// }
 
 		// For X Layer
 		// Count successful transactions
@@ -906,7 +906,7 @@ func sequencingBatchStep(
 	metrics.GetLogStatistics().SetTag(metrics.FinalizeBatchNumber, strconv.Itoa(int(batchState.batchNumber)))
 	tryToSleepSequencer(cfg.zk.XLayer.SequencerBatchSleepDuration, logPrefix)
 	startCommitTime := time.Now()
-	err = sdb.Commit(s, false)
+	err = sdb.Commit()
 	metrics.GetLogStatistics().CumulativeTiming(metrics.BatchCommitDBTiming, time.Since(startCommitTime))
 
 	batchTime := time.Since(batchStart)
