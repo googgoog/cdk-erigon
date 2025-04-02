@@ -115,6 +115,7 @@ different_files=(
     "CallToIndex.txt"
     "InnerTx.txt"
     "DbInfo.txt"
+    "AccountHistory.txt"
 )
 
 is_in_array() {
