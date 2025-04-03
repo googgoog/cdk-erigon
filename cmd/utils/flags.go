@@ -591,6 +591,11 @@ var (
 		Usage: "Reuse the L1 info index for resequencing",
 		Value: true,
 	}
+	StandaloneSMTDatabase = cli.BoolFlag{
+		Name:  "zkevm.standalone-smt-db",
+		Usage: "Use standalone SMT database, not integrated with chaindb",
+		Value: false,
+	}
 	ExecutorUrls = cli.StringFlag{
 		Name:  "zkevm.executor-urls",
 		Usage: "A comma separated list of grpc addresses that host executors",
@@ -2304,6 +2309,7 @@ func SetEthConfig(ctx *cli.Context, nodeConfig *nodecfg.Config, cfg *ethconfig.C
 	setGPO(ctx, &cfg.GPO)
 
 	setTxPool(ctx, cfg)
+	SetPreRunList(ctx, cfg)
 	cfg.TxPool = ethconfig.DefaultTxPool2Config(cfg)
 	cfg.TxPool.DBDir = nodeConfig.Dirs.TxPool
 	cfg.YieldSize = ctx.Uint64(YieldSizeFlag.Name)

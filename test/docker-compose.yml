@@ -361,7 +361,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.51.2
-    command: 
+    command:
       - --log.level=warn
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus

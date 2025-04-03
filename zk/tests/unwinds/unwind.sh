@@ -133,6 +133,7 @@ compare_dumps() {
     local comparison_dir=$2
     local label=$3
     local expected_diffs=("${!4}")
+    local has_error=0
 
     echo "[$(date)] Comparing dumps between $original_dir and $comparison_dir..."
 
@@ -142,7 +143,8 @@ compare_dumps() {
 
         if [[ ! -f "$file_comparison" ]]; then
             echo "[$(date)] File $filename missing in $comparison_dir." >&2
-            exit 1
+            has_error=1
+            continue
         fi
 
         if cmp -s "$file" "$file_comparison"; then
@@ -157,11 +159,16 @@ compare_dumps() {
                 echo "[$(date)] $label - Unexpected differences in $filename" >&2
                 echo "[$(date)] Dumping differences for $filename:" >&2
                 diff -u "$file" "$file_comparison" >&2 || true
-                exit 1
+                has_error=1
             fi
         fi
     done
+
+    if [ $has_error -eq 1 ]; then
+        exit 1
+    fi
 }
+
 
 # Compare first stop dumps
 compare_dumps "$dataPath/${firstStop}" "$dataPath/${firstStop}-unwound" "Unwind Check" different_files[@]

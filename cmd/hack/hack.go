@@ -326,6 +326,7 @@ func dumpStorage() {
 }
 
 func dumpAll(chaindata, output string) error {
+	kv.InitStandaloneSMT(false)
 	db := mdbx.MustOpen(chaindata)
 	defer db.Close()
 
