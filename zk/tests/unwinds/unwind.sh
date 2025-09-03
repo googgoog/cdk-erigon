@@ -150,7 +150,10 @@ different_files=(
     "CallToIndex.txt"
     "InnerTx.txt"
     "DbInfo.txt"
+    "AccountHistory.txt"
 )
+
+# 111
 
 is_in_array() {
     local element="$1"

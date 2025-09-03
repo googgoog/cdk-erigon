@@ -1218,10 +1218,13 @@ func (tx *MdbxTx) statelessCursor(bucket string) (kv.RwCursor, error) {
 }
 
 func (tx *MdbxTx) Put(table string, k, v []byte) error {
+	fmt.Println("MdbxTx prepare put", k, v)
 	c, err := tx.statelessCursor(table)
 	if err != nil {
+		fmt.Println("MdbxTx Put error", err)
 		return err
 	}
+	fmt.Println("MdbxTx Put", k, v)
 	return c.Put(k, v)
 }
 
